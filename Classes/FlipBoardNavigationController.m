@@ -13,7 +13,7 @@ static const CGFloat kAnimationDuration = 0.5f;
 static const CGFloat kAnimationDelay = 0.0f;
 static const CGFloat kOffsetTrigger = 30.0f;
 static const CGFloat kMaxBlackMaskAlpha = 0.8f;
-static const CGFloat kViewScaleSize = 0.95f;
+static const CGFloat kViewScaleSize = 0.88f;
 
 
 typedef enum {
@@ -106,6 +106,61 @@ typedef enum {
 }
 
 #pragma mark - PopViewController With Completion Block
+
+- (void) popToRootViewControllerWithoutAnimation{
+    [self popToRootViewControllerWithoutAnimationWithCompletion: nil];
+}
+
+- (void) popToRootViewControllerWithoutAnimationWithCompletion:(FlipBoardNavigationControllerCompletionBlock)handler{
+    
+    _animationInProgress = YES;
+    if (self.viewControllers.count < 2) {
+        return;
+    }
+    
+    UIViewController *currentVC = [self currentViewController];
+    UIViewController *rootVC = [self rootViewController];
+    if(![currentVC isEqual: rootVC]){
+        [rootVC viewWillAppear:NO];
+        for(int index = [self.viewControllers count] - 2; index > 0; index--){
+            UIViewController *vc = self.viewControllers[index];
+            [vc.view removeFromSuperview];
+            [vc removeFromParentViewController];
+        }
+        [UIView animateWithDuration:kAnimationDuration delay:kAnimationDelay options:0 animations:^{
+            currentVC.view.frame = CGRectOffset(self.view.bounds, self.view.bounds.size.width, 0);
+            CGAffineTransform transf = CGAffineTransformIdentity;
+            rootVC.view.transform = CGAffineTransformScale(transf, 1.0, 1.0);
+            rootVC.view.frame = self.view.bounds;
+            _blackMask.alpha = 0.0;
+        } completion:^(BOOL finished) {
+            if (finished) {
+                [currentVC.view removeFromSuperview];
+                [currentVC willMoveToParentViewController:nil];
+                [self.view bringSubviewToFront:[self rootViewController].view];
+                [currentVC removeFromParentViewController];
+                [currentVC didMoveToParentViewController:nil];
+                [_viewControllers removeObjectsAtIndexes:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(1, [_viewControllers count] - 1)]];
+                _animationInProgress = NO;
+                [rootVC viewDidAppear:NO];
+                if(handler != nil){
+                    handler();
+                }
+            }
+        }];
+
+    }
+    
+}
+
+- (UIViewController *)rootViewController {
+    UIViewController *result = nil;
+    if ([self.viewControllers count]>0) {
+        result = [self.viewControllers objectAtIndex:0];
+    }
+    return result;
+}
+
 - (void) popViewControllerWithCompletion:(FlipBoardNavigationControllerCompletionBlock)handler {
     _animationInProgress = YES;
     if (self.viewControllers.count < 2) {
@@ -233,7 +288,7 @@ typedef enum {
 }
 
 - (BOOL) gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
-    return YES;
+    return NO;
 }
 
 -(void)rightPanViewControllerAnimationEndWithDirection:(PanDirection)direction
@@ -289,7 +344,9 @@ typedef enum {
     BOOL moveLeft = vel.x<1;
     UIViewController * vc= [self currentViewController];
     
-    if(self.rightPanController.view.frame.origin.x==0&&moveLeft)
+    if(self.rightPanController&&
+       self.rightPanController.view.frame.origin.x==0&&
+       moveLeft)
         return;
     if(self.rightPanController&&//是否存在右侧的panViewController
        ((moveLeft&&_rightPanController.view.center.x>160)||//向左滑入rightPanView
